@@ -40,12 +40,14 @@ class JWTService {
     )
     return token;
   };
-  verifyTempToken(token:string):{name:string,email:string,description:string,profilePicture:string}{
-    const data:{name:string,email:string,description:string,profilePicture:string}= jwt.verify(token,this.SECRET);
+  verifyTempToken(token: string): { name: string; email: string; description: string; profilePicture: string } {
+    const data = jwt.verify(token, this.SECRET) as { name: string; email: string; description: string; profilePicture: string };
     return {
-      name:data.name,
-
-    }
+      name: data.name,
+      email: data.email,
+      description: data.description,
+      profilePicture: data.profilePicture,
+    };
   }
 }
 

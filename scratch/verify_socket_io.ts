@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { Redis } from "ioredis";
 
 const BASE_URL = "http://localhost:3000";
 
@@ -24,8 +25,37 @@ async function runVerification() {
     throw new Error(`Registration failed: ${await registerResponse.text()}`);
   }
 
-  const registerData = (await registerResponse.json()) as { user: any; token: string };
-  console.log("Registration successful!");
+  const registerResult = (await registerResponse.json()) as { otpSent: boolean; tempToken: string };
+  console.log("Registration API returned otpSent:", registerResult.otpSent);
+
+  // 1.5. Fetch OTP from Redis and Verify
+  console.log("\n1.5. Fetching OTP from Redis...");
+  const redis = new Redis();
+  const cached = await redis.get(`otp:${email}`);
+  if (!cached) {
+    throw new Error("OTP not found in Redis cache");
+  }
+  const { otp } = JSON.parse(cached);
+  await redis.quit();
+  console.log("Retrieved OTP:", otp);
+
+  console.log("Verifying OTP...");
+  const verifyResponse = await fetch(`${BASE_URL}/api/users/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email,
+      otp,
+      tempToken: registerResult.tempToken,
+    }),
+  });
+
+  if (!verifyResponse.ok) {
+    throw new Error(`OTP Verification failed: ${await verifyResponse.text()}`);
+  }
+
+  const registerData = (await verifyResponse.json()) as { user: any; token: string };
+  console.log("OTP Verification successful!");
   console.log("User ID:", registerData.user.id);
   console.log("JWT Token length:", registerData.token.length);
 

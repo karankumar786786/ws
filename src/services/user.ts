@@ -14,7 +14,7 @@ export class UserService {
     private readonly cache: Cache,
     private readonly mailService: MailService,
   ) {
-    this.jwtService = new JWTService(process.env.JWT_SECRET || "default_jwt_secret_key");
+    this.jwtService = new JWTService(process.env.JWT_SECRET || process.env.SECRET || "default_jwt_secret_key");
   }
 
   async register(data: Omit<Users, "id">): Promise<{ otpSent: Boolean, tempToken: string }> {
@@ -73,5 +73,46 @@ export class UserService {
     return await this.userRepository.findAll();
   }
 
-  async verifyOTP(otp: string, email:)
+  async verifyOTP(otp: string, email: string, tempToken: string): Promise<{ user: Users; token: string }> {
+    let decoded;
+    try {
+      decoded = this.jwtService.verifyTempToken(tempToken);
+    } catch (err) {
+      throw new Error("Invalid or expired registration token");
+    }
+
+    if (decoded.email !== email) {
+      throw new Error("Email mismatch");
+    }
+
+    const cachedData = await this.cache.get(`otp:${email}`);
+    if (!cachedData) {
+      throw new Error("OTP expired or not found");
+    }
+
+    const data = JSON.parse(cachedData);
+    if (data.otp !== otp) {
+      throw new Error("Invalid OTP");
+    }
+
+    const user = await this.userRepository.create({
+      name: decoded.name,
+      email: decoded.email,
+      description: decoded.description || null,
+      profilePicture: decoded.profilePicture || null,
+    });
+
+    const token = this.jwtService.generateToken(
+      {
+        userId: user.id,
+        userName: user.name,
+        profilePicture: user.profilePicture || undefined,
+      },
+      120 // 120 minutes expiration
+    );
+
+    await this.cache.delete(`otp:${email}`);
+
+    return { user, token };
+  }
 }

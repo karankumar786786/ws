@@ -13,6 +13,12 @@ const loginUserSchema = z.object({
   email: z.string({ error: "email must be a string" }).email("email should be proper format of mail"),
 });
 
+const verifyOTPSchema = z.object({
+  email: z.string({ error: "email must be a string" }).email("email should be proper format of mail"),
+  otp: z.string({ error: "otp must be a string" }).min(1, "otp should not be empty"),
+  tempToken: z.string({ error: "tempToken must be a string" }).min(1, "tempToken should not be empty"),
+});
+
 export class UserController {
   constructor(
     private readonly userService: UserService,
@@ -71,6 +77,20 @@ export class UserController {
       res.status(200).json(users);
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Internal server error" });
+    }
+  }
+
+  async verifyOTP(req: Request, res: Response) {
+    try {
+      const data = verifyOTPSchema.parse(req.body);
+      const result = await this.userService.verifyOTP(data.otp, data.email, data.tempToken);
+      res.status(200).json(result);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.issues });
+      } else {
+        res.status(400).json({ error: error.message || "Bad Request" });
+      }
     }
   }
 }
