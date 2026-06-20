@@ -1,6 +1,5 @@
-import { foreignKey, pgTable, varchar } from "drizzle-orm/pg-core";
+import {  pgTable, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import z from "zod";
 
 
 export const users = pgTable(
@@ -48,7 +47,6 @@ export const UserInputType = createInsertSchema(users);
 export const UserFriendInputType = createInsertSchema(userFriend);
 export const GroupInputType = createInsertSchema(groups);
 export const GroupMemberInputType = createInsertSchema(groupMembers);
-
 export type Users = typeof users.$inferSelect;
 export type UserFriend = typeof userFriend.$inferSelect;
 export type Groups = typeof groups.$inferSelect;

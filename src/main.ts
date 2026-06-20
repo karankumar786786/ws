@@ -1,11 +1,6 @@
-import express, { type NextFunction } from "express";
-import { WebSocketServer, WebSocket } from "ws";
+import express from "express";
 import { createServer } from "http";
-import url from "url";
-import { eq } from "drizzle-orm";
-import { db } from "./index";
-import { groups, groupMembers } from "./db/schema";
-import JWTService, { type Payload } from "./util/jwt";
+import JWTService from "./util/jwt";
 import userRouter from "./routes/user";
 import {Server} from "socket.io";
 import { Chat } from "./types/chat.type";
