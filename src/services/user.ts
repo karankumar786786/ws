@@ -7,8 +7,6 @@ import type { MailService } from "../util/mail";
 
 export class UserService {
   private readonly jwtService: JWTService;
-
-
   constructor(
     private readonly userRepository: UserRepository,
     private readonly cache: Cache,
@@ -25,44 +23,35 @@ export class UserService {
     if (existingUser) {
       throw new Error("Email already registered");
     }
-    const otp = generateOTP();
+    const otp: string = generateOTP();
     await this.mailService.sendOTP({
       to: data.email,
       subject: "register",
       otp: otp
     });
     const cacheData = { ...data, otp };
-    await this.cache.setWithTTL(`otp:${data.email}`, JSON.stringify(cacheData), 5);
-    // const user = await this.userRepository.create(data);
-    // const token = this.jwtService.generateToken(
-    //   {
-    //     userId: user.id,
-    //     userName: user.name,
-    //     profilePicture: user.profilePicture || undefined,
-    //   },
-    //   120 // 120 minutes expiration
-    // );
-
+    await this.cache.setWithTTL(`otp:register:${data.email}`, JSON.stringify(cacheData), 5);
     const tempToken: string = this.jwtService.generateTempToken({ name: data.name, email: data.email, description: `${data.description}`, profilePicture: `${data.profilePicture}` }, 5);
     return { otpSent: true, tempToken };
   }
 
-  async login(email: string): Promise<{ user: Users; token: string }> {
+  async login(email: string): Promise<{ user: Users; tempToken: string }> {
     const user = await this.userRepository.findByEmail(email);
     if (!user) {
       throw new Error("User with this email not found");
     }
 
-    const token = this.jwtService.generateToken(
-      {
-        userId: user.id,
-        userName: user.name,
-        profilePicture: user.profilePicture || undefined,
-      },
-      120 // 120 minutes expiration
-    );
+    const otp: string = generateOTP();
+    await this.mailService.sendOTP({
+      to: email,
+      subject: "register",
+      otp: otp
+    });
+    const cacheData = { ...user, otp };
+    await this.cache.setWithTTL(`otp:login:${email}`, JSON.stringify(cacheData), 5);
+    const tempToken: string = this.jwtService.generateTempToken({ name: user.name, email: email, description: `${user.description}`, profilePicture: `${user.profilePicture}` }, 5);
 
-    return { user, token };
+    return { user, tempToken };
   }
 
   async findById(id: string): Promise<Users> {
@@ -72,37 +61,36 @@ export class UserService {
   async findAll(): Promise<Users[]> {
     return await this.userRepository.findAll();
   }
+  async findByEmail(email:string):Promise<Users>{
+    const data = await this.userRepository.findByEmail(email);
+    if (!data) {
+      throw new Error("id not found");
+    };
+    return data;
+  }
 
-  async verifyOTP(otp: string, email: string, tempToken: string): Promise<{ user: Users; token: string }> {
+  async verifyOTP(otp: string, tempToken: string): Promise<{ user: Users; authenticationTokens: { accessToken: string, refreshToken: string } }> {
     let decoded;
     try {
       decoded = this.jwtService.verifyTempToken(tempToken);
     } catch (err) {
       throw new Error("Invalid or expired registration token");
     }
-
-    if (decoded.email !== email) {
-      throw new Error("Email mismatch");
-    }
-
-    const cachedData = await this.cache.get(`otp:${email}`);
+    const cachedData = await this.cache.get(`otp:register:${decoded.email}`);
     if (!cachedData) {
       throw new Error("OTP expired or not found");
     }
-
     const data = JSON.parse(cachedData);
     if (data.otp !== otp) {
       throw new Error("Invalid OTP");
     }
-
-    const user = await this.userRepository.create({
+    const user: Users = await this.userRepository.create({
       name: decoded.name,
       email: decoded.email,
       description: decoded.description || null,
       profilePicture: decoded.profilePicture || null,
     });
-
-    const token = this.jwtService.generateToken(
+    const accessToken: string = this.jwtService.generateToken(
       {
         userId: user.id,
         userName: user.name,
@@ -110,9 +98,56 @@ export class UserService {
       },
       120 // 120 minutes expiration
     );
-
-    await this.cache.delete(`otp:${email}`);
-
-    return { user, token };
+    const refreshToken: string = this.jwtService.generateToken(
+      {
+        userId: user.id,
+        userName: user.name,
+        profilePicture: user.profilePicture || undefined,
+      },
+      300
+    )
+    await this.cache.delete(`otp:${decoded.email}`);
+    return { user, authenticationTokens: { accessToken: accessToken, refreshToken: refreshToken } };
   }
+  async verifyOTPLogin(otp: string, tempToken: string): Promise<{ user: Users; authenticationTokens: { accessToken: string, refreshToken: string } }> {
+    let decoded;
+    try {
+      decoded = this.jwtService.verifyTempToken(tempToken);
+    } catch (err) {
+      throw new Error("Invalid or expired registration token");
+    }
+    const cachedData = await this.cache.get(`otp:login:${decoded.email}`);
+    if (!cachedData) {
+      throw new Error("OTP expired or not found");
+    }
+    const data = JSON.parse(cachedData);
+    if (data.otp !== otp) {
+      throw new Error("Invalid OTP");
+    }
+    const user: Users = await this.userRepository.create({
+      name: decoded.name,
+      email: decoded.email,
+      description: decoded.description || null,
+      profilePicture: decoded.profilePicture || null,
+    });
+    const accessToken: string = this.jwtService.generateToken(
+      {
+        userId: user.id,
+        userName: user.name,
+        profilePicture: user.profilePicture || undefined,
+      },
+      120 // 120 minutes expiration
+    );
+    const refreshToken: string = this.jwtService.generateToken(
+      {
+        userId: user.id,
+        userName: user.name,
+        profilePicture: user.profilePicture || undefined,
+      },
+      300
+    )
+    await this.cache.delete(`otp:${decoded.email}`);
+    return { user, authenticationTokens: { accessToken: accessToken, refreshToken: refreshToken } };
+  }
+
 }

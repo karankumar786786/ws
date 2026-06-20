@@ -19,5 +19,6 @@ router.post("/verify", (req, res) => userController.verifyOTP(req, res));
 router.post("/login", (req, res) => userController.login(req, res));
 router.get("/:id", (req, res) => userController.getById(req, res));
 router.get("/", (req, res) => userController.getAll(req, res));
+router.get("/:email", (req, res) => userController.getByEmail(req, res));
 
 export default router;

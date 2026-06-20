@@ -89,10 +89,10 @@ async function runVerification() {
         timestamp: new Date().toISOString(),
       };
 
-      socket.emit("message", chatPayload);
+      socket.emit("send_message", chatPayload);
     });
 
-    socket.on("message", (chatData) => {
+    socket.on("receive_message", (chatData) => {
       console.log("Received message event:", chatData);
       if (chatData.message === "Hello self from Socket.io!") {
         console.log("Private message echoed successfully!");
